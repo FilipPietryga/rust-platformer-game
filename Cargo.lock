@@ -2329,6 +2329,7 @@ dependencies = [
  "collider",
  "ggez",
  "num-traits",
+ "rand",
 ]
 
 [[package]]
