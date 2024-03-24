@@ -20,7 +20,10 @@ const PLAYER_IMAGE_LEFT: &str = "/player_left.png";
 const PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED: f64 = 160.0;
 const PLAYER_INITIAL_RUNNING_RATE_CONSTANT: f64 = 2.5;
 const PLAYER_INITIAL_JUMP_SPEED: f64 = -280.0;
+const PLAYER_INITIAL_COLLIDES_LEFT: bool = false;
+const PLAYER_INITIAL_COLLIDES_RIGHT: bool = false;
 //const HORIZONTAL_DECELERATION_RATE: f32 = 1.0; <-- sliding mechanique
+const INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT: f64 = 0.0;
 
 //MAX SPEED
 //const MAXIMAL_HORIZONTAL_SPEED_LIMIT_CONSTANT: f64 = 500.0;
@@ -37,6 +40,8 @@ const RUNNING_KEY: KeyMods = KeyMods::SHIFT;
 
 //BLOCK
 const INITIAL_BLOCK_IMAGE: &str = "/block_one.png";
+const INITIAL_BLOCK_COUNTER: f64 = 128.0;
+const INITIAL_BLOCK_ID: f64 = 9.0;
 
 //WALL
 const WALL_SPEED_CONSTANT: f64 = 40.0;
@@ -87,6 +92,17 @@ impl Player {
 
     pub fn move_horizontally(&mut self, speed:f64) {
         self.pos_x += speed;
+    }
+    
+    pub fn reset(&mut self) {
+        self.pos_x = PLAYER_INITIAL_X;
+        self.pos_y = PLAYER_INITIAL_Y;
+        self.direction = PLAYER_INITIAL_DIRECTION;
+        self.standing = PLAYER_INITIAL_STANDING;
+        self.horizontal_speed = PLAYER_INITIAL_HORIZONTAL_SPEED;
+        self.vertical_speed = PLAYER_INITIAL_VERTICAL_SPEED;
+        self.collides_left = PLAYER_INITIAL_COLLIDES_LEFT;
+        self.collides_right = PLAYER_INITIAL_COLLIDES_RIGHT;
     }
 }
 
@@ -235,8 +251,42 @@ impl Timeless {
         let wall_image = Image::from_path(ctx, WALL_IMAGE_CONSTANT).unwrap();
         let bullet_image = Image::from_path(ctx, BULLET_IMAGE_CONSTANT).unwrap();
 
-    
-        Timeless { player, speed, player_image, blocks, cumulative_horizontal_movement: 0.0, wall_x: INITIAL_WALL_PLACEMENT, wall_image: wall_image, block_counter: 248.0, block_id: 9.0, wall_speed: WALL_SPEED_CONSTANT, bullet_image }
+        Timeless { player, speed, player_image, blocks, cumulative_horizontal_movement: INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT, wall_x: INITIAL_WALL_PLACEMENT, wall_image: wall_image, block_counter: INITIAL_BLOCK_COUNTER, block_id: INITIAL_BLOCK_ID, wall_speed: WALL_SPEED_CONSTANT, bullet_image }
+    }
+
+    pub fn reset(&mut self, ctx: &mut Context) {
+        let player = Player::new(
+            PLAYER_INITIAL_X, PLAYER_INITIAL_Y, PLAYER_INITIAL_DIRECTION, PLAYER_INITIAL_STANDING, PLAYER_INITIAL_VERTICAL_SPEED, PLAYER_INITIAL_HORIZONTAL_SPEED, PLAYER_INITIAL_COLLIDES_RIGHT, PLAYER_INITIAL_COLLIDES_LEFT
+        );
+        let speed = INITIAL_WORLD_SPEED_MULTIPLIER;
+        let player_image = Image::from_path(ctx, PLAYER_INITIAL_IMAGE).unwrap();
+
+        let blocks: Vec<Block> = vec![
+            Block { rect: Rectangle{x: 0.0, y: 320.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0, y: 320.0 + 128.0 / 2.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*2.0, y: 320.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*3.0, y: 320.0 + 128.0 / 2.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*4.0, y: 320.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*5.0, y: 320.0 + 128.0 / 2.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*6.0, y: 320.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*7.0, y: 320.0 + 128.0 / 2.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+            Block { rect: Rectangle{x: 128.0*8.0, y: 320.0, width: 128.0, height: 128.0, collision_direction: Some(CollisionDirection::Right)}, image: Image::from_path(ctx, INITIAL_BLOCK_IMAGE).unwrap()},
+        ];
+
+        let wall_image = Image::from_path(ctx, WALL_IMAGE_CONSTANT).unwrap();
+        let bullet_image = Image::from_path(ctx, BULLET_IMAGE_CONSTANT).unwrap();
+        
+        self.player = player;
+        self.player_image = player_image;
+        self.blocks = blocks;
+        self.wall_image = wall_image;
+        self.bullet_image = bullet_image;
+        self.speed = speed;
+        self.wall_x = INITIAL_WALL_PLACEMENT;
+        self.wall_speed = WALL_SPEED_CONSTANT;
+        self.cumulative_horizontal_movement = INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT;
+        self.block_id = INITIAL_BLOCK_ID;
+        self.block_counter = INITIAL_BLOCK_COUNTER;
     }
 }
 
@@ -257,20 +307,20 @@ impl EventHandler for Timeless {
             self.player_image = Image::from_path(_ctx, PLAYER_IMAGE_RIGHT).unwrap();
             if k_ctx.is_mod_active(RUNNING_KEY) {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction * RUNNING_CONSTANT;
-                self.player.horizontal_speed = self.speed * PLAYER_INITIAL_HORIZONTAL_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
+                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
             } else {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction;
-                self.player.horizontal_speed = self.speed * PLAYER_INITIAL_HORIZONTAL_SPEED * self.player.direction;
+                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
             }
         } else if k_ctx.is_key_pressed(LEFT_KEY) && !self.player.collides_left {
             self.player.direction = -1.0;
             self.player_image = Image::from_path(_ctx, PLAYER_IMAGE_LEFT).unwrap();
             if k_ctx.is_mod_active(RUNNING_KEY) {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction * RUNNING_CONSTANT;
-                self.player.horizontal_speed = self.speed * PLAYER_INITIAL_HORIZONTAL_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
+                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
             } else {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction;
-                self.player.horizontal_speed = self.speed * PLAYER_INITIAL_HORIZONTAL_SPEED * self.player.direction;
+                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
             }
         }
 
@@ -546,10 +596,11 @@ impl EventHandler for Timeless {
                 println!("Terminating!");
                 ctx.request_quit();
             },
-            Some(KeyCode::Z) => {
-            },
-            Some(KeyCode::X) => {
-                println!("One shot!");
+            Some(KeyCode::R) => {
+                println!("Reseting!");
+                //todo!("re-initialize the game when pressed R");
+                self.player.reset();
+                self.reset(ctx);
             },
             Some(KeyCode::C) => {
                 println!("Time attack!");
