@@ -1,7 +1,7 @@
 use ggez::{conf::{self}, glam::{self, *}, input::{keyboard::{KeyCode, KeyInput, KeyMods}}, timer, Context, ContextBuilder, GameResult};
 use ggez::graphics::{self, Color, Image};
 use ggez::event::{self, EventHandler};
-use std::{env, path};
+use std::{env, f32::consts::PI, path};
 use crate::f32::Vec2;
 use rand::Rng;
 
@@ -44,7 +44,7 @@ const INITIAL_BLOCK_COUNTER: f64 = 128.0;
 const INITIAL_BLOCK_ID: f64 = 9.0;
 
 //WALL
-const WALL_SPEED_CONSTANT: f64 = 40.0;
+const WALL_SPEED_CONSTANT: f64 = 60.0;
 const WALL_SPEED_ACCELERATED_CONSTANT: f64 = 1800.0;
 const INITIAL_WALL_PLACEMENT: f64 = -1200.0;
 const WALL_IMAGE_CONSTANT: &str = "/wall2.png";
@@ -54,6 +54,16 @@ const BLOCK_COUNTER_CONSTANT: f64 = 128.0;
 
 //BULLET
 const BULLET_IMAGE_CONSTANT: &str = "/bullet.png";
+const BULLET_SPEED_CONSTANT: f64 = 800.0;
+
+//BACKGROUND
+const INITIAL_BACKGROUND_COUNTER: f64 = 480.0;
+const INITIAL_POWERUP_COUNTER: f64 = 2300.0;
+const INITIAL_ENEMY_COUNTER: f64 = 3600.0;
+
+const INITIAL_SPEED_COUNTER: f64 = 1000.0;
+
+const ENEMY_INITIAL_COOLDOWN: f64 = 300.0;
 
 //THE STATE OF PLAYER
 #[derive(Copy, Clone, Debug)]
@@ -103,6 +113,27 @@ impl Player {
         self.vertical_speed = PLAYER_INITIAL_VERTICAL_SPEED;
         self.collides_left = PLAYER_INITIAL_COLLIDES_LEFT;
         self.collides_right = PLAYER_INITIAL_COLLIDES_RIGHT;
+    }
+}
+
+struct Background {
+    x: f64,
+    y: f64,
+    image: Image,
+    rotation: f64
+}
+
+// THE BASIC BUILDING BLOCK OF THE WORLD
+// Implement methods for the Background struct
+impl Background {
+    // Constructor method to create a new Background instance
+    fn new(x: f64, y: f64, image: Image, rotation: f64) -> Self {
+        Background {
+            x,
+            y,
+            image,
+            rotation
+        }
     }
 }
 
@@ -210,6 +241,28 @@ struct Bullet {
     speed: f64,
     x: f64,
     y: f64,
+    direction: f64
+}
+
+struct Powerup {
+    x: f64,
+    y: f64,
+    image: Image
+}
+
+struct Enemy {
+    x: f64,
+    y: f64,
+    image: Image,
+    cooldown: f64
+}
+
+struct Enemy_Bullet {
+    x: f64,
+    y: f64,
+    dx: f64,
+    dy: f64,
+    image: Image
 }
 
 // Game State
@@ -224,7 +277,17 @@ struct Timeless {
     block_counter: f64,
     block_id: f64,
     wall_speed: f64,
-    bullet_image: Image
+    bullet_image: Image,
+    bullets: Vec<Bullet>,
+    backgrounds: Vec<Background>,
+    background_counter: f64,
+    powerups: Vec<Powerup>,
+    enemies: Vec<Enemy>,
+    powerup_counter: f64,
+    enemy_counter: f64,
+    speed_counter: f64,
+    clear_powerups: bool,
+    enemy_bullets: Vec<Enemy_Bullet>
 }
 
 impl Timeless {
@@ -251,7 +314,53 @@ impl Timeless {
         let wall_image = Image::from_path(ctx, WALL_IMAGE_CONSTANT).unwrap();
         let bullet_image = Image::from_path(ctx, BULLET_IMAGE_CONSTANT).unwrap();
 
-        Timeless { player, speed, player_image, blocks, cumulative_horizontal_movement: INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT, wall_x: INITIAL_WALL_PLACEMENT, wall_image: wall_image, block_counter: INITIAL_BLOCK_COUNTER, block_id: INITIAL_BLOCK_ID, wall_speed: WALL_SPEED_CONSTANT, bullet_image }
+        let bullets: Vec<Bullet> = vec![];
+        let backgrounds: Vec<Background> = vec![
+            Self::randomly_generate_background(0.0, ctx)
+        ];
+        
+        let powerups: Vec<Powerup> = vec![
+            Self::randomly_generate_powerups(0.0, ctx)
+        ];
+        let enemies: Vec<Enemy> = vec![
+            Self::randomly_generate_enemy(0.0, ctx)
+        ];
+        let enemy_bullets: Vec<Enemy_Bullet> = vec![];
+        Timeless { player, speed, player_image, blocks, cumulative_horizontal_movement: INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT, wall_x: INITIAL_WALL_PLACEMENT, wall_image: wall_image, block_counter: INITIAL_BLOCK_COUNTER, block_id: INITIAL_BLOCK_ID, wall_speed: WALL_SPEED_CONSTANT, bullet_image, bullets, backgrounds, background_counter: 480.0, powerups, enemies, powerup_counter: INITIAL_POWERUP_COUNTER, enemy_counter: INITIAL_ENEMY_COUNTER, speed_counter: INITIAL_SPEED_COUNTER, clear_powerups: false, enemy_bullets: enemy_bullets }
+    }
+
+    pub fn randomly_generate_background(offset_x: f64, ctx: &mut Context) -> Background {
+        let num = rand::thread_rng().gen_range(0..100);
+        let background_image;
+        if num < 33 {
+            background_image = Image::from_path(ctx, "/background1.png").unwrap();
+        } else if num < 66 {
+            background_image = Image::from_path(ctx, "/background2.png").unwrap();
+        } else {
+            background_image = Image::from_path(ctx, "/background3.png").unwrap();
+        }
+        let num = rand::thread_rng().gen_range(0..100);
+        let rotation: f32;
+        if num < 25 {
+            rotation = 0.0;
+        } else if num < 50 {
+            rotation = PI*0.5;
+        } else if num < 75 {
+            rotation = PI;
+        } else {
+            rotation = PI*1.5;
+        }
+        Background { x: (rand::thread_rng().gen_range(640..1280) as f64 + offset_x) as f64, y: (rand::thread_rng().gen_range(-120..240)) as f64, image: (background_image), rotation: rotation.into() }
+    }
+
+    pub fn randomly_generate_powerups(offset_x: f64, ctx: &mut Context) -> Powerup {
+        let powerup_image = Image::from_path(ctx, "/clock2.png").unwrap();
+        Powerup { x: (rand::thread_rng().gen_range(640..1280) as f64 + offset_x) as f64, y: (rand::thread_rng().gen_range(220..300)) as f64, image: (powerup_image) }
+    }
+
+    pub fn randomly_generate_enemy(offset_x: f64, ctx: &mut Context) -> Enemy {
+        let enemy_image = Image::from_path(ctx, "/enemy_right.png").unwrap();
+        Enemy { x: (rand::thread_rng().gen_range(640..1280) as f64 + offset_x) as f64, y: 64 as f64, image: (enemy_image), cooldown: ENEMY_INITIAL_COOLDOWN }
     }
 
     pub fn reset(&mut self, ctx: &mut Context) {
@@ -287,6 +396,28 @@ impl Timeless {
         self.cumulative_horizontal_movement = INITIAL_CUMULATIVE_HORIZONTAL_MOVEMENT;
         self.block_id = INITIAL_BLOCK_ID;
         self.block_counter = INITIAL_BLOCK_COUNTER;
+        self.background_counter = INITIAL_BACKGROUND_COUNTER;
+        self.backgrounds = vec![
+            Self::randomly_generate_background(0.0, ctx)
+        ];
+        self.bullets = vec![];
+        self.clear_powerups = false;
+        self.powerup_counter = INITIAL_POWERUP_COUNTER;
+        self.enemy_counter = INITIAL_ENEMY_COUNTER;
+        self.speed_counter = 0.0;
+        let backgrounds: Vec<Background> = vec![
+            Self::randomly_generate_background(0.0, ctx)
+        ];
+        let powerups: Vec<Powerup> = vec![
+            Self::randomly_generate_powerups(0.0, ctx)
+        ];
+        let enemies: Vec<Enemy> = vec![
+            Self::randomly_generate_enemy(0.0, ctx)
+        ];
+        self.backgrounds = backgrounds;
+        self.powerups = powerups;
+        self.enemies = enemies;
+        self.enemy_bullets = vec![];
     }
 }
 
@@ -307,20 +438,20 @@ impl EventHandler for Timeless {
             self.player_image = Image::from_path(_ctx, PLAYER_IMAGE_RIGHT).unwrap();
             if k_ctx.is_mod_active(RUNNING_KEY) {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction * RUNNING_CONSTANT;
-                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
+                self.player.horizontal_speed = PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
             } else {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction;
-                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
+                self.player.horizontal_speed = PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
             }
         } else if k_ctx.is_key_pressed(LEFT_KEY) && !self.player.collides_left {
             self.player.direction = -1.0;
             self.player_image = Image::from_path(_ctx, PLAYER_IMAGE_LEFT).unwrap();
             if k_ctx.is_mod_active(RUNNING_KEY) {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction * RUNNING_CONSTANT;
-                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
+                self.player.horizontal_speed = PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction * PLAYER_INITIAL_RUNNING_RATE_CONSTANT;
             } else {
                 //self.player.horizontal_speed += self.speed * HORIZONTAL_SPEED_CONSTANT * self.player.direction;
-                self.player.horizontal_speed = self.speed * PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
+                self.player.horizontal_speed = PLAYER_INIITAL_HORIZONTAL_MOVEMENT_SPEED * self.player.direction;
             }
         }
 
@@ -337,6 +468,7 @@ impl EventHandler for Timeless {
         //JUMP TRIGGER
         if k_ctx.is_key_just_pressed(KeyCode::X) {
             println!("SHOT!");
+            self.bullets.push(Bullet{speed: BULLET_SPEED_CONSTANT, x: self.player.pos_x+32.0 + self.cumulative_horizontal_movement, y: self.player.pos_y+16.0, direction: self.player.direction })
         }
 
         //</KEYSTROKES IN EVENT HANDLER>
@@ -422,9 +554,24 @@ impl EventHandler for Timeless {
         if self.player.pos_x < 320.0 {
             self.player.move_horizontally(self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64());
             self.block_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.background_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.enemy_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.powerup_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.speed_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            //INSERT HERE LALALALA
+            for item in self.enemies.iter_mut() {
+                item.cooldown -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            }
         } else {
             self.cumulative_horizontal_movement += self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
             self.block_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.background_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.enemy_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.powerup_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            self.speed_counter -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            for item in self.enemies.iter_mut() {
+                item.cooldown -= self.player.horizontal_speed * timer::delta(_ctx).as_secs_f64();
+            }
         }
         self.player.horizontal_speed = 0.0;
         //</APPLY THE MOVEMENT AND CLIP IT WHEN EXCEEDS 320>
@@ -465,7 +612,6 @@ impl EventHandler for Timeless {
             let mut player_collider = Rectangle { x: self.player.pos_x+11.0, y: self.player.pos_y, width: 42.0, height: 64.0, collision_direction: Some(CollisionDirection::Right) };
 
             for item in self.blocks.iter() {
-                let platform_collider = item.rect;
 
                 let mut x_2 = item.rect.x;
                 if self.player.pos_x >= 320.0 {
@@ -513,7 +659,7 @@ impl EventHandler for Timeless {
 
 
         //FALL CALCULATION
-        self.player.pos_y += self.speed * self.player.vertical_speed * timer::delta(_ctx).as_secs_f64();
+        self.player.pos_y += self.player.vertical_speed * timer::delta(_ctx).as_secs_f64();
 
 
         //THE WALL MOVEMENT
@@ -522,6 +668,10 @@ impl EventHandler for Timeless {
             self.wall_speed = WALL_SPEED_ACCELERATED_CONSTANT;
         } else {
             self.wall_speed = WALL_SPEED_CONSTANT;
+        }
+
+        if self.speed < 1.0 {
+            self.wall_speed = -300.0;
         }
 
         //THE WALL "EATING" MECHANIQUE
@@ -548,6 +698,101 @@ impl EventHandler for Timeless {
             self.block_counter = BLOCK_COUNTER_CONSTANT;
         }
 
+        //MOVE BULLETS
+        for item in self.bullets.iter_mut() {
+            item.x += item.speed * item.direction * timer::delta(_ctx).as_secs_f64();
+        }
+
+        //GENERATE BACKGRONUDS
+        if self.background_counter <= 0.0 {
+            let offset_x = self.player.pos_x + self.cumulative_horizontal_movement;
+            self.backgrounds.push(Timeless::randomly_generate_background(offset_x, _ctx));
+            self.background_counter = INITIAL_BACKGROUND_COUNTER;
+        }
+
+        //GENERATE ENEMIES
+        if self.enemy_counter <= 0.0 {
+            let offset_x = self.player.pos_x + self.cumulative_horizontal_movement;
+            self.enemies.push(Timeless::randomly_generate_enemy(offset_x, _ctx));
+            self.enemy_counter = INITIAL_ENEMY_COUNTER;
+        }
+
+        //GENERATE POWERUPS
+        if self.powerup_counter <= 0.0 {
+            let offset_x = self.player.pos_x + self.cumulative_horizontal_movement;
+            self.powerups.push(Timeless::randomly_generate_powerups(offset_x, _ctx));
+            self.powerup_counter = INITIAL_POWERUP_COUNTER;
+        }
+
+        //COLLIDE WITH THE POWERUP
+        for item in self.powerups.iter_mut() {
+
+            let mut x_2 = item.x;
+            if self.player.pos_x > 320.0 {
+                x_2 = item.x - self.player.pos_x + 320.0 - self.cumulative_horizontal_movement;
+            }
+            let rect = Rectangle{x: x_2, y: item.y, width: 32.0, height: 32.0, collision_direction: Some(CollisionDirection::Right)};
+
+            if player_collider.intersects_horizontally(&rect) {
+                println!("Collision with the powerup detected!");
+                self.speed = 0.25;
+                self.speed_counter = INITIAL_SPEED_COUNTER;
+                self.clear_powerups = true;
+            }
+        }
+
+        //COLLECT POWERUPS
+        if self.clear_powerups {
+            self.clear_powerups = false;
+            self.powerups.clear();
+        }
+
+        //RESET THE SPEED OF THE WORLD
+        if self.speed_counter <= 0.0 {
+            self.speed_counter = 0.0;
+            self.speed = 1.0;
+        }
+
+        //</CALCULATIONS FOR THE HORIZONTAL COLLISION>
+        let mut reset: bool = false;
+        
+        //COLLIDE WITH THE ENEMY BULLET
+        for item in self.enemy_bullets.iter_mut() {
+
+            let mut x_2 = item.x;
+            if self.player.pos_x > 320.0 {
+                x_2 = item.x - self.player.pos_x + 320.0 - self.cumulative_horizontal_movement;
+            }
+            let rect = Rectangle{x: x_2, y: item.y, width: 32.0, height: 32.0, collision_direction: Some(CollisionDirection::Right)};
+
+            if player_collider.intersects_horizontally(&rect) {
+                println!("Collision with the enemy bullet detected!");
+                reset = true;
+            }
+        }
+        if reset {
+            self.reset(_ctx);
+        }
+
+        //GENERATE ENEMY BULLET
+        //COLLIDE WITH THE ENEMY BULLET
+        for item in self.enemies.iter_mut() {
+            if item.cooldown <= 0.0 {
+                let x = item.x - 64.0;
+                let y = item.y + 4.0;
+                let dx = self.player.pos_x + self.cumulative_horizontal_movement - item.x - 64.0;
+                let dy = self.player.pos_y - item.y + 4.0;
+                self.enemy_bullets.push(Enemy_Bullet{x,y,dx,dy, image: Image::from_path(_ctx, "/enemy_bullet.png").unwrap()});
+                item.cooldown = ENEMY_INITIAL_COOLDOWN;
+            }
+        }
+
+        //MOVE ENEMY BULLET
+        for item in self.enemy_bullets.iter_mut() {
+            item.x += item.dx/9.0 * timer::delta(_ctx).as_secs_f64() * self.speed;
+            item.y += item.dy/9.0 * timer::delta(_ctx).as_secs_f64() * self.speed;
+        }
+
         Ok(())
     }
 
@@ -555,6 +800,16 @@ impl EventHandler for Timeless {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         //INITIALIZE THE CANVAS
         let mut canvas: graphics::Canvas = graphics::Canvas::from_frame(ctx,Color::BLACK);
+
+        // DRAW EACH BACKGROUND
+        for item in self.backgrounds.iter() {
+            let mut x_2: f64 = item.x;
+            if self.player.pos_x >= 320.0 {
+                x_2 = item.x-self.player.pos_x+320.0 -self.cumulative_horizontal_movement;
+            }
+            let dst = glam::Vec2::new((x_2) as f32, (item.y) as f32);
+            canvas.draw(&item.image, graphics::DrawParam::new().dest(dst).rotation(item.rotation as f32));
+        }
 
         // DRAW THE PLAYER
         let dst = glam::Vec2::new(self.player.pos_x as f32, self.player.pos_y as f32);
@@ -567,6 +822,43 @@ impl EventHandler for Timeless {
                 x_2 = item.rect.x-self.player.pos_x+320.0 -self.cumulative_horizontal_movement;
             }
             let dst = glam::Vec2::new((x_2) as f32, (item.rect.y) as f32);
+            canvas.draw(&item.image, graphics::DrawParam::new().dest(dst));
+        }
+
+        // DRAW EACH BULLEt
+        for item in self.bullets.iter() {
+            let mut x_2: f64 = item.x;
+            if self.player.pos_x >= 320.0 {
+                x_2 = item.x-self.player.pos_x+320.0 - self.cumulative_horizontal_movement;
+            }
+            let dst = glam::Vec2::new((x_2) as f32, (item.y) as f32);
+            canvas.draw(&self.bullet_image, graphics::DrawParam::new().dest(dst));
+        }
+
+        for item in self.enemy_bullets.iter() {
+            let mut x_2: f64 = item.x;
+            if self.player.pos_x >= 320.0 {
+                x_2 = item.x-self.player.pos_x+320.0 - self.cumulative_horizontal_movement;
+            }
+            let dst = glam::Vec2::new((x_2) as f32, (item.y) as f32);
+            canvas.draw(&item.image, graphics::DrawParam::new().dest(dst));
+        }
+
+        for item in self.enemies.iter() {
+            let mut x_2: f64 = item.x;
+            if self.player.pos_x >= 320.0 {
+                x_2 = item.x-self.player.pos_x+320.0 -self.cumulative_horizontal_movement;
+            }
+            let dst = glam::Vec2::new((x_2) as f32, (item.y) as f32);
+            canvas.draw(&item.image, graphics::DrawParam::new().dest(dst).rotation(PI));
+        }
+
+        for item in self.powerups.iter() {
+            let mut x_2: f64 = item.x;
+            if self.player.pos_x >= 320.0 {
+                x_2 = item.x-self.player.pos_x+320.0 -self.cumulative_horizontal_movement;
+            }
+            let dst = glam::Vec2::new((x_2) as f32, (item.y) as f32);
             canvas.draw(&item.image, graphics::DrawParam::new().dest(dst));
         }
 
